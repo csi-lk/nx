@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import * as glob from 'glob';
 
 import { normalizePath, workspaceRoot } from '@nx/devkit';
 
 import { execGradleAsync } from './exec-gradle';
-import { hashWithWorkspaceContext } from 'nx/src/utils/workspace-context';
 
 export const fileSeparator = process.platform.startsWith('win')
   ? 'file:///'
@@ -20,6 +20,10 @@ export interface GradleReport {
   gradleFileToOutputDirsMap: Map<string, Map<string, string>>;
   gradleProjectToTasksTypeMap: Map<string, Map<string, string>>;
   gradleProjectToProjectName: Map<string, string>;
+  dependenciesMap: Map<string, string>;
+  subProjectToParentProjectMap: Map<string, string>;
+  projectNames: Set<string>;
+  projectNameToSettingsFileMap: Map<string, string>;
 }
 
 let gradleReportCache: GradleReport;
@@ -36,47 +40,11 @@ export function getCurrentGradleReport() {
   return gradleReportCache;
 }
 
-export async function populateGradleReport(
-  workspaceRoot: string
-): Promise<void> {
-  const gradleConfigHash = await hashWithWorkspaceContext(workspaceRoot, [
-    gradleConfigGlob,
-  ]);
-  if (gradleReportCache && gradleConfigHash === gradleCurrentConfigHash) {
-    return;
-  }
-
-  const gradleProjectReportStart = performance.mark(
-    'gradleProjectReport:start'
-  );
-  const projectReportLines = (
-    await execGradleAsync(['projectReport'], {
-      cwd: workspaceRoot,
-    })
-  )
-    .toString()
-    .split(newLineSeparator);
-  const gradleProjectReportEnd = performance.mark('gradleProjectReport:end');
-  performance.measure(
-    'gradleProjectReport',
-    gradleProjectReportStart.name,
-    gradleProjectReportEnd.name
-  );
-  gradleReportCache = processProjectReports(projectReportLines);
-}
-
-export function processProjectReports(
-  projectReportLines: string[]
-): GradleReport {
+function initialGradleReport(): GradleReport {
   /**
    * Map of Gradle File path to Gradle Project Name
    */
   const gradleFileToGradleProjectMap = new Map<string, string>();
-  /**
-   * Map of Gradle Project Name to Gradle File
-   */
-  const gradleProjectToGradleFileMap = new Map<string, string>();
-  const dependenciesMap = new Map<string, string>();
   /**
    * Map of Gradle Build File to tasks type map
    */
@@ -91,7 +59,102 @@ export function processProjectReports(
    * e.g. {build.gradle.kts: { projectReportDir: '' testReportDir: '' }}
    */
   const gradleFileToOutputDirsMap = new Map<string, Map<string, string>>();
+  /**
+   * Map of gradle project to dependencies report path
+   */
+  const dependenciesMap = new Map<string, string>();
+  /**
+   * Map of sub project to parent project
+   */
+  const subProjectToParentProjectMap = new Map<string, string>();
+  /**
+   * Set of all project names
+   */
+  const projectNames = new Set<string>();
+  /**
+   * Map of project name to settings file
+   */
+  const projectNameToSettingsFileMap = new Map<string, string>();
 
+  return {
+    gradleFileToGradleProjectMap,
+    dependenciesMap,
+    buildFileToDepsMap,
+    gradleFileToOutputDirsMap,
+    gradleProjectToTasksTypeMap,
+    gradleProjectToProjectName,
+    subProjectToParentProjectMap,
+    projectNames,
+    projectNameToSettingsFileMap,
+  };
+}
+
+export function getGradleReport(): GradleReport {
+  if (gradleReportCache) {
+    return gradleReportCache;
+  }
+
+  const gradleProjectReportStart = performance.mark(
+    'gradleProjectReport:start'
+  );
+
+  gradleReportCache = initialGradleReport();
+  runProjectsForSettingsFiles(gradleReportCache);
+
+  const gradleProjectReportEnd = performance.mark('gradleProjectReport:end');
+  performance.measure(
+    'gradleProjectReport',
+    gradleProjectReportStart.name,
+    gradleProjectReportEnd.name
+  );
+  return gradleReportCache;
+}
+
+function runProjectsForSettingsFiles(gradleReport: GradleReport) {
+  const settingFiles: string[] = glob.sync('**/settings.{gradle.kts,gradle}');
+  settingFiles.forEach(async (settingFile) => {
+    const settingDir = dirname(settingFile);
+    try {
+      const projectReportLines = await execGradleAsync(['projectReport'], {
+        cwd: settingDir,
+      })
+        .toString()
+        .split(newLineSeparator);
+      processProjectReports(projectReportLines, gradleReport);
+    } catch (e) {
+      console.error(
+        `Error running projectReport for ${settingDir}. Please make sure the projectReport task is available in your build script.`,
+        e
+      );
+    }
+
+    try {
+      const projectsLines = await execGradleAsync(['projects'], {
+        cwd: settingDir,
+      })
+        .toString()
+        .split(newLineSeparator);
+      processProjects(projectsLines, settingFile, gradleReport);
+    } catch (e) {
+      console.error(
+        `Error running projects for ${settingDir}. Please make sure the projects task is available in your build script.`,
+        e
+      );
+    }
+  });
+}
+
+export function processProjectReports(
+  projectReportLines: string[],
+  {
+    dependenciesMap,
+    buildFileToDepsMap,
+    gradleFileToOutputDirsMap,
+    gradleFileToGradleProjectMap,
+    gradleProjectToTasksTypeMap,
+    gradleProjectToProjectName,
+  }: GradleReport
+) {
   let index = 0;
   while (index < projectReportLines.length) {
     const line = projectReportLines[index].trim();
@@ -170,7 +233,6 @@ export function processProjectReports(
 
         gradleFileToOutputDirsMap.set(buildFile, outputDirMap);
         gradleFileToGradleProjectMap.set(buildFile, gradleProject);
-        gradleProjectToGradleFileMap.set(gradleProject, buildFile);
         gradleProjectToProjectName.set(gradleProject, projectName);
       }
       if (line.endsWith('taskReport')) {
@@ -212,12 +274,49 @@ export function processProjectReports(
     }
     index++;
   }
+}
 
-  return {
-    gradleFileToGradleProjectMap,
-    buildFileToDepsMap,
-    gradleFileToOutputDirsMap,
-    gradleProjectToTasksTypeMap,
-    gradleProjectToProjectName,
-  };
+export function processProjects(
+  projectsLines: string[],
+  settingsFile: string,
+  {
+    subProjectToParentProjectMap,
+    projectNameToSettingsFileMap,
+    projectNames,
+  }: GradleReport
+) {
+  let projectName: string;
+  for (const line of projectsLines) {
+    if (line.startsWith('Root project')) {
+      projectName = line
+        .substring('Root project '.length)
+        .replaceAll("'", '')
+        .trim();
+      projectNames.add(projectName);
+      projectNameToSettingsFileMap.set(projectName, settingsFile);
+      continue;
+    }
+    if (projectName) {
+      const [indents, dep] = line.split('--- ');
+      if (indents === '\\' || indents === '+') {
+        let subProject;
+        if (dep.startsWith('Included build ')) {
+          subProject = dep.substring('Included build '.length);
+        } else if (dep.startsWith('Project ')) {
+          subProject = dep.substring('Project '.length);
+        }
+        if (subProject) {
+          subProject = subProject
+            .replace(/ \(n\)$/, '')
+            .replaceAll("'", '')
+            .trim();
+          subProject = subProject.startsWith(':')
+            ? subProject.substring(1)
+            : subProject;
+          projectNames.add(subProject);
+          subProjectToParentProjectMap.set(subProject, projectName);
+        }
+      }
+    }
+  }
 }

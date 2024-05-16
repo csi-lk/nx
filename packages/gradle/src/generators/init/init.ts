@@ -2,6 +2,7 @@ import {
   addDependenciesToPackageJson,
   formatFiles,
   GeneratorCallback,
+  globAsync,
   logger,
   readNxJson,
   runTasksInSerial,
@@ -12,6 +13,7 @@ import { execSync } from 'child_process';
 import { nxVersion } from '../../utils/versions';
 import { InitGeneratorSchema } from './schema';
 import { hasGradlePlugin } from '../../utils/has-gradle-plugin';
+import { dirname, extname, join } from 'path';
 
 export async function initGenerator(tree: Tree, options: InitGeneratorSchema) {
   const tasks: GeneratorCallback[] = [];
@@ -39,7 +41,24 @@ Running 'gradle init':`);
 
   addPlugin(tree);
   updateNxJsonConfiguration(tree);
-  addProjectReportToBuildGradle(tree);
+
+  const settingsGradleFiles = await globAsync(tree, ['**/settings.gradle*']);
+  settingsGradleFiles.forEach((settingsGradleFile) => {
+    // create a build.gradle file near settings.gradle file if it does not exist
+    let gradleFilePath = join(
+      dirname(settingsGradleFile),
+      'build' + extname(settingsGradleFile)
+    );
+    if (!tree.exists(gradleFilePath)) {
+      tree.write(gradleFilePath, '');
+    }
+  });
+  const buildGradleFiles = await globAsync(tree, [
+    '**/build.{gradle.kts,gradle}',
+  ]);
+  buildGradleFiles.forEach((buildGradleFile) => {
+    addProjectReportToBuildGradle(buildGradleFile, tree);
+  });
 
   if (!options.skipFormat) {
     await formatFiles(tree);
@@ -68,20 +87,13 @@ function addPlugin(tree: Tree) {
 /**
  * This function adds the project-report plugin to the build.gradle or build.gradle.kts file
  */
-function addProjectReportToBuildGradle(tree: Tree) {
-  let buildGradleFile: string;
-  if (tree.exists('settings.gradle.kts')) {
-    buildGradleFile = 'build.gradle.kts';
-  } else if (tree.exists('settings.gradle')) {
-    buildGradleFile = 'build.gradle';
-  }
-
+function addProjectReportToBuildGradle(buildGradleFile: string, tree: Tree) {
   let buildGradleContent = '';
   if (tree.exists(buildGradleFile)) {
     buildGradleContent = tree.read(buildGradleFile).toString();
   }
   if (buildGradleContent.includes('allprojects')) {
-    if (!buildGradleContent.includes('"project-report')) {
+    if (!buildGradleContent.includes('"project-report"')) {
       logger.warn(`Please add the project-report plugin to your ${buildGradleFile}:
 allprojects {
   apply {
@@ -95,6 +107,22 @@ allprojects {
       plugin("project-report")
   }
 }`;
+  }
+
+  if (!buildGradleContent.includes(`tasks.register("projectReportAll")`)) {
+    buildGradleContent += `\n\rtasks.register("projectReportAll") {
+    // All project reports of subprojects
+    allprojects.forEach {
+        dependsOn(it.tasks.get("projectReport"))
+    }
+
+    // All projectReportAll of included builds
+    gradle.includedBuilds.forEach {
+        dependsOn(it.task(":projectReportAll"))
+    }
+}`;
+  }
+  if (buildGradleContent) {
     tree.write(buildGradleFile, buildGradleContent);
   }
 }

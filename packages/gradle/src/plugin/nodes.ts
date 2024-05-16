@@ -53,7 +53,10 @@ type GradleTargets = Record<
   }
 >;
 
-function readTargetsCache(cachePath: string): GradleTargets {
+function readTargetsCache(cachePath: string): {
+  project?: GradleTargets;
+  parentProject?: GradleTargets;
+} {
   return existsSync(cachePath) ? readJsonFile(cachePath) : {};
 }
 
@@ -110,13 +113,16 @@ export const makeCreateNodes =
       options,
       context
     );
-    const project = targetsCache[hash];
+    const { project, parentProject, parentProjectRoot } = targetsCache[hash];
     if (!project) {
       return {};
     }
     return {
       projects: {
         [projectRoot]: project,
+        ...(parentProject && parentProjectRoot
+          ? { [parentProjectRoot]: parentProject }
+          : {}),
       },
     };
   };
@@ -150,6 +156,8 @@ function createGradleProject(
       gradleFileToOutputDirsMap,
       gradleFileToGradleProjectMap,
       gradleProjectToProjectName,
+      subProjectToParentProjectMap,
+      projectNameToSettingsFileMap,
     } = gradleReport;
 
     const gradleProject = gradleFileToGradleProjectMap.get(
@@ -165,7 +173,7 @@ function createGradleProject(
       string
     >;
     let tasks: GradleTask[] = [];
-    for (let [taskName, taskType] of tasksTypeMap.entries()) {
+    for (let [taskName, taskType] of tasksTypeMap?.entries() ?? []) {
       tasks.push({
         type: taskType,
         name: taskName,
@@ -192,8 +200,32 @@ function createGradleProject(
         technologies: ['gradle'],
       },
     };
+    const parentProjectName = subProjectToParentProjectMap.get(projectName);
+    let parentProject, parentProjectRoot;
+    if (
+      parentProjectName &&
+      !Array.from(gradleProjectToProjectName.values()).includes(
+        parentProjectName
+      )
+    ) {
+      parentProject = {
+        name: parentProjectName,
+        targets: {},
+        metadata: {
+          technologies: ['gradle'],
+        },
+      };
+      const settingsFile = projectNameToSettingsFileMap.get(parentProjectName);
+      if (settingsFile) {
+        parentProjectRoot = dirname(settingsFile);
+      }
+    }
 
-    return project;
+    return {
+      project,
+      parentProject,
+      parentProjectRoot,
+    };
   } catch (e) {
     console.error(e);
     return undefined;

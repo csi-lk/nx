@@ -23,13 +23,14 @@ export const createDependencies: CreateDependencies = async (
     return [];
   }
 
-  let dependencies: RawProjectGraphDependency[] = [];
   const gradleDependenciesStart = performance.mark('gradleDependencies:start');
   const {
     gradleFileToGradleProjectMap,
     gradleProjectToProjectName,
     buildFileToDepsMap,
+    projectNames,
   } = getCurrentGradleReport();
+  const dependencies: Set<RawProjectGraphDependency> = new Set();
 
   for (const gradleFile of gradleFiles) {
     const gradleProject = gradleFileToGradleProjectMap.get(gradleFile);
@@ -37,19 +38,18 @@ export const createDependencies: CreateDependencies = async (
     const depsFile = buildFileToDepsMap.get(gradleFile);
 
     if (projectName && depsFile) {
-      dependencies = dependencies.concat(
-        Array.from(
-          processGradleDependencies(
-            depsFile,
-            gradleProjectToProjectName,
-            projectName,
-            gradleFile,
-            context
-          )
-        )
+      processGradleDependencies(
+        depsFile,
+        gradleProjectToProjectName,
+        projectName,
+        gradleFile,
+        context,
+        projectNames,
+        dependencies
       );
     }
   }
+
   const gradleDependenciesEnd = performance.mark('gradleDependencies:end');
   performance.measure(
     'gradleDependencies',
@@ -57,7 +57,7 @@ export const createDependencies: CreateDependencies = async (
     gradleDependenciesEnd.name
   );
 
-  return dependencies;
+  return Array.from(dependencies);
 };
 
 const gradleConfigFileNames = new Set(['build.gradle', 'build.gradle.kts']);
@@ -81,9 +81,10 @@ function processGradleDependencies(
   gradleProjectToProjectName: Map<string, string>,
   sourceProjectName: string,
   gradleFile: string,
-  context: CreateDependenciesContext
+  context: CreateDependenciesContext,
+  projectNames: Set<string>,
+  dependencies: Set<RawProjectGraphDependency>
 ): Set<RawProjectGraphDependency> {
-  const dependencies: Set<RawProjectGraphDependency> = new Set();
   const lines = readFileSync(depsFile).toString().split(newLineSeparator);
   let inDeps = false;
   for (const line of lines) {
@@ -101,22 +102,36 @@ function processGradleDependencies(
         continue;
       }
       const [indents, dep] = line.split('--- ');
-      if ((indents === '\\' || indents === '+') && dep.startsWith('project ')) {
-        const gradleProjectName = dep
-          .substring('project '.length)
-          .replace(/ \(n\)$/, '')
-          .trim();
-        const target = gradleProjectToProjectName.get(
-          gradleProjectName
-        ) as string;
-        const dependency: RawProjectGraphDependency = {
-          source: sourceProjectName,
-          target,
-          type: DependencyType.static,
-          sourceFile: gradleFile,
-        };
-        validateDependency(dependency, context);
-        dependencies.add(dependency);
+      if (indents === '\\' || indents === '+') {
+        if (dep.startsWith('project ')) {
+          const gradleProjectName = dep
+            .substring('project '.length)
+            .replace(/ \(n\)$/, '')
+            .trim();
+          const target = gradleProjectToProjectName.get(
+            gradleProjectName
+          ) as string;
+          const dependency: RawProjectGraphDependency = {
+            source: sourceProjectName,
+            target,
+            type: DependencyType.static,
+            sourceFile: gradleFile,
+          };
+          validateDependency(dependency, context);
+          dependencies.add(dependency);
+        } else if (dep.includes(':')) {
+          const [_, projectName] = dep.split(':');
+          if (projectNames.has(projectName)) {
+            const dependency: RawProjectGraphDependency = {
+              source: sourceProjectName,
+              target: projectName,
+              type: DependencyType.static,
+              sourceFile: gradleFile,
+            };
+            validateDependency(dependency, context);
+            dependencies.add(dependency);
+          }
+        }
       }
     }
   }
