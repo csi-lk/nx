@@ -10,8 +10,8 @@ import { combineGlobPatterns } from '../../utils/globs';
 import { NX_PREFIX } from '../../utils/logger';
 import { output } from '../../utils/output';
 import {
-  PackageJson,
   getMetadataFromPackageJson,
+  PackageJson,
   readTargetsFromPackageJson,
 } from '../../utils/package-json';
 import { joinPathFragments } from '../../utils/path';
@@ -88,22 +88,33 @@ export function buildProjectConfigurationFromPackageJson(
   }
 
   let name = packageJson.name ?? toProjectName(normalizedPath);
-  const projectType =
-    nxJson?.workspaceLayout?.appsDir != nxJson?.workspaceLayout?.libsDir &&
-    nxJson?.workspaceLayout?.appsDir &&
-    directory.startsWith(nxJson.workspaceLayout.appsDir)
-      ? 'application'
-      : 'library';
 
-  return {
+  const projectConfiguration: ProjectConfiguration & { name: string } = {
     root: directory,
     sourceRoot: directory,
     name,
-    projectType,
     ...packageJson.nx,
     targets: readTargetsFromPackageJson(packageJson),
     metadata: getMetadataFromPackageJson(packageJson),
   };
+
+  if (
+    typeof nxJson?.workspaceLayout?.appsDir !== 'undefined' &&
+    typeof nxJson?.workspaceLayout?.libsDir !== 'undefined'
+  ) {
+    projectConfiguration.projectType =
+      nxJson?.workspaceLayout?.appsDir != nxJson?.workspaceLayout?.libsDir &&
+      directory.startsWith(nxJson.workspaceLayout.appsDir)
+        ? 'application'
+        : 'library';
+  } else if (
+    typeof nxJson?.workspaceLayout?.libsDir !== 'undefined' &&
+    directory.startsWith(nxJson.workspaceLayout.libsDir)
+  ) {
+    projectConfiguration.projectType = 'library';
+  }
+
+  return projectConfiguration;
 }
 
 /**

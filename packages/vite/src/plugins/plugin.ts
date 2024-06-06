@@ -4,6 +4,7 @@ import {
   CreateNodesContext,
   detectPackageManager,
   joinPathFragments,
+  ProjectConfiguration,
   readJsonFile,
   TargetConfiguration,
   writeJsonFile,
@@ -75,13 +76,21 @@ export const createNodes: CreateNodes<VitePluginOptions> = [
       options,
       context
     );
+    const project: ProjectConfiguration = {
+      root: projectRoot,
+      targets: targetsCache[hash],
+    };
 
+    // If project is buildable, then the project type.
+    // If it is not buildable, then leave it to other plugins/project.json to set the project type.
+    if (project.targets[options.buildTargetName]) {
+      project.projectType = project.targets[options.serveTargetName]
+        ? 'application'
+        : 'library';
+    }
     return {
       projects: {
-        [projectRoot]: {
-          root: projectRoot,
-          targets: targetsCache[hash],
-        },
+        [projectRoot]: project,
       },
     };
   },
@@ -97,7 +106,6 @@ async function buildViteTargets(
     context.workspaceRoot,
     configFilePath
   );
-
   // Workaround for the `build$3 is not a function` error that we sometimes see in agents.
   // This should be removed later once we address the issue properly
   try {
@@ -140,11 +148,12 @@ async function buildViteTargets(
       projectRoot
     );
 
-    targets[options.serveTargetName] = serveTarget(projectRoot);
-
-    targets[options.previewTargetName] = previewTarget(projectRoot);
-
-    targets[options.serveStaticTargetName] = serveStaticTarget(options) as {};
+    // If running in library mode, then there is nothing to serve.
+    if (!viteConfig.build?.lib) {
+      targets[options.serveTargetName] = serveTarget(projectRoot);
+      targets[options.previewTargetName] = previewTarget(projectRoot);
+      targets[options.serveStaticTargetName] = serveStaticTarget(options) as {};
+    }
   }
 
   // if file is vitest.config or vite.config has definition for test, create target for test
