@@ -26,6 +26,7 @@ import {
   loadViteDynamicImport,
   validateTypes,
 } from '../../utils/executor-utils';
+import { type Plugin } from 'vite';
 
 export async function* viteBuildExecutor(
   options: Record<string, any> & ViteBuildExecutorOptions,
@@ -82,8 +83,13 @@ export async function* viteBuildExecutor(
   if (!options.skipTypeCheck) {
     await validateTypes({
       workspaceRoot: context.root,
-      projectRoot: projectRoot,
       tsconfig: options.tsConfig ?? getProjectTsConfigPath(projectRoot),
+      isVueProject: Boolean(
+        resolved.config.plugins?.find(
+          (plugin: Plugin) =>
+            typeof plugin === 'object' && plugin?.name === 'vite:vue'
+        )
+      ),
     });
   }
 
