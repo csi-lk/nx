@@ -1,7 +1,11 @@
 import { ExecutorContext, names } from '@nx/devkit';
+import { readJsonFile, writeJsonFile } from 'nx/src/utils/fileutils';
 import { ChildProcess, fork } from 'child_process';
 
 import { ExpoInstallOptions } from './schema';
+import { join } from 'path';
+import { existsSync } from 'fs';
+import { PackageJson } from 'nx/src/utils/package-json';
 
 export interface ExpoInstallOutput {
   success: boolean;
@@ -18,7 +22,7 @@ export default async function* installExecutor(
 
   try {
     await installAsync(context.root, options);
-
+    updateProjectPackageJson(projectRoot, options);
     yield {
       success: true,
     };
@@ -76,4 +80,27 @@ function createInstallOptions(options: ExpoInstallOptions) {
     }
     return acc;
   }, []);
+}
+
+/**
+ * This function updates the package.json file in the project root with the packages passed in the options
+ * @param projectRoot
+ * @param options
+ */
+function updateProjectPackageJson(
+  projectRoot: string,
+  options: ExpoInstallOptions
+) {
+  const packageJsonPath = join(projectRoot, 'package.json');
+  const packages: string[] =
+    typeof options.packages === 'string'
+      ? options.packages.split(',')
+      : options.packages;
+  if (options.packages?.length && existsSync(packageJsonPath)) {
+    const packageJson = readJsonFile<PackageJson>(packageJsonPath);
+    for (const p of packages) {
+      packageJson.dependencies[p] = '*';
+    }
+    writeJsonFile(packageJsonPath, packageJson);
+  }
 }

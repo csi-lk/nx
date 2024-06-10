@@ -124,8 +124,8 @@ function buildExpoTargets(
       outputs: [getOutputs(projectRoot, 'dist')],
     },
     [options.installTargetName]: {
-      command: `expo install`,
-      options: { cwd: workspaceRoot }, // install at workspace root
+      command: '@nx/expo:install',
+      options: { cwd: projectRoot },
     },
     [options.prebuildTargetName]: {
       executor: `@nx/expo:prebuild`,
