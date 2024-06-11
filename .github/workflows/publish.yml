@@ -89,244 +89,241 @@ jobs:
             echo "✅ The file ${{ env.FILE_TO_COMPARE }} is identical between the ${{ fromJSON(steps.script.outputs.result).ref }} branch on ${{ fromJSON(steps.script.outputs.result).repo }} and latest master on nrwl/nx."
           fi
 
-  build:
-    needs: [resolve-required-data]
-    if: ${{ github.repository_owner == 'nrwl' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        settings:
-          - host: macos-13
-            target: x86_64-apple-darwin
-            build: |
-              pnpm nx run-many --target=build-native -- --target=x86_64-apple-darwin
-          - host: windows-latest
-            build: pnpm nx run-many --target=build-native -- --target=x86_64-pc-windows-msvc
-            target: x86_64-pc-windows-msvc
-          # Windows 32bit (not needed)
-          # - host: windows-latest
-          #   build: |
-          #     yarn nx -- run-many --target=build-native -- --target=i686-pc-windows-msvc
-          #   target: i686-pc-windows-msvc
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
-            build: |-
-              set -e &&
-              npm i -g pnpm@8.15.7 --force &&
-              pnpm --version &&
-              pnpm install --frozen-lockfile &&
-              pnpm nx run-many --verbose --target=build-native -- --target=x86_64-unknown-linux-gnu
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: |-
-              set -e &&
-              npm i -g pnpm@8.15.7 --force &&
-              pnpm --version &&
-              pnpm install --frozen-lockfile &&
-              pnpm nx run-many --verbose --target=build-native -- --target=x86_64-unknown-linux-musl
-          - host: macos-13
-            target: aarch64-apple-darwin
-            build: |
-              sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*;
-              export CC=$(xcrun -f clang);
-              export CXX=$(xcrun -f clang++);
-              SYSROOT=$(xcrun --sdk macosx --show-sdk-path);
-              export CFLAGS="-isysroot $SYSROOT -isystem $SYSROOT";
-              pnpm nx run-many --target=build-native -- --target=aarch64-apple-darwin
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
-            build: |-
-              set -e &&
-              npm i -g pnpm@8.15.7 --force &&
-              pnpm --version &&
-              pnpm install --frozen-lockfile &&
-              pnpm nx run-many --verbose --target=build-native -- --target=aarch64-unknown-linux-gnu
-          - host: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            setup: |
-              sudo apt-get update
-              sudo apt-get install gcc-arm-linux-gnueabihf -y
-            build: |
-              pnpm nx run-many --target=build-native -- --target=armv7-unknown-linux-gnueabihf
-          # Android (not needed)
-          # - host: ubuntu-latest
-          #   target: aarch64-linux-android
-          #   build: |
-          #     pnpm nx run-many --target=build-native -- --target=aarch64-linux-android
-          # - host: ubuntu-latest
-          #   target: armv7-linux-androideabi
-          #   build: |
-          #     pnpm nx run-many --target=build-native -- --target=armv7-linux-androideabi
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: |-
-              set -e &&
-              rustup target add aarch64-unknown-linux-musl &&
-              npm i -g pnpm@8.15.7 --force &&
-              pnpm --version &&
-              pnpm install --frozen-lockfile &&
-              pnpm nx run-many --verbose --target=build-native -- --target=aarch64-unknown-linux-musl
-          - host: windows-latest
-            target: aarch64-pc-windows-msvc
-            build: pnpm nx run-many --target=build-native -- --target=aarch64-pc-windows-msvc
-    name: stable - ${{ matrix.settings.target }} - node@18
-    runs-on: ${{ matrix.settings.host }}
-    steps:
-      - uses: actions/checkout@v4
-        if: ${{ !github.event.inputs.pr }}
-        with:
-          repository: ${{ needs.resolve-required-data.outputs.repo }} 
-          ref: ${{ needs.resolve-required-data.outputs.ref }}
+  # build:
+  #   needs: [resolve-required-data]
+  #   if: ${{ github.repository_owner == 'nrwl' }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       settings:
+  #         - host: macos-13
+  #           target: x86_64-apple-darwin
+  #           build: |
+  #             pnpm nx run-many --target=build-native -- --target=x86_64-apple-darwin
+  #         - host: windows-latest
+  #           build: pnpm nx run-many --target=build-native -- --target=x86_64-pc-windows-msvc
+  #           target: x86_64-pc-windows-msvc
+  #         # Windows 32bit (not needed)
+  #         # - host: windows-latest
+  #         #   build: |
+  #         #     yarn nx -- run-many --target=build-native -- --target=i686-pc-windows-msvc
+  #         #   target: i686-pc-windows-msvc
+  #         - host: ubuntu-latest
+  #           target: x86_64-unknown-linux-gnu
+  #           docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+  #           build: |-
+  #             set -e &&
+  #             npm i -g pnpm@8.15.7 --force &&
+  #             pnpm --version &&
+  #             pnpm install --frozen-lockfile &&
+  #             pnpm nx run-many --verbose --target=build-native -- --target=x86_64-unknown-linux-gnu
+  #         - host: ubuntu-latest
+  #           target: x86_64-unknown-linux-musl
+  #           docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+  #           build: |-
+  #             set -e &&
+  #             npm i -g pnpm@8.15.7 --force &&
+  #             pnpm --version &&
+  #             pnpm install --frozen-lockfile &&
+  #             pnpm nx run-many --verbose --target=build-native -- --target=x86_64-unknown-linux-musl
+  #         - host: macos-13
+  #           target: aarch64-apple-darwin
+  #           build: |
+  #             sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*;
+  #             export CC=$(xcrun -f clang);
+  #             export CXX=$(xcrun -f clang++);
+  #             SYSROOT=$(xcrun --sdk macosx --show-sdk-path);
+  #             export CFLAGS="-isysroot $SYSROOT -isystem $SYSROOT";
+  #             pnpm nx run-many --target=build-native -- --target=aarch64-apple-darwin
+  #         - host: ubuntu-latest
+  #           target: aarch64-unknown-linux-gnu
+  #           docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
+  #           build: |-
+  #             set -e &&
+  #             npm i -g pnpm@8.15.7 --force &&
+  #             pnpm --version &&
+  #             pnpm install --frozen-lockfile &&
+  #             pnpm nx run-many --verbose --target=build-native -- --target=aarch64-unknown-linux-gnu
+  #         - host: ubuntu-latest
+  #           target: armv7-unknown-linux-gnueabihf
+  #           setup: |
+  #             sudo apt-get update
+  #             sudo apt-get install gcc-arm-linux-gnueabihf -y
+  #           build: |
+  #             pnpm nx run-many --target=build-native -- --target=armv7-unknown-linux-gnueabihf
+  #         # Android (not needed)
+  #         # - host: ubuntu-latest
+  #         #   target: aarch64-linux-android
+  #         #   build: |
+  #         #     pnpm nx run-many --target=build-native -- --target=aarch64-linux-android
+  #         # - host: ubuntu-latest
+  #         #   target: armv7-linux-androideabi
+  #         #   build: |
+  #         #     pnpm nx run-many --target=build-native -- --target=armv7-linux-androideabi
+  #         - host: ubuntu-latest
+  #           target: aarch64-unknown-linux-musl
+  #           docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+  #           build: |-
+  #             set -e &&
+  #             rustup target add aarch64-unknown-linux-musl &&
+  #             npm i -g pnpm@8.15.7 --force &&
+  #             pnpm --version &&
+  #             pnpm install --frozen-lockfile &&
+  #             pnpm nx run-many --verbose --target=build-native -- --target=aarch64-unknown-linux-musl
+  #         - host: windows-latest
+  #           target: aarch64-pc-windows-msvc
+  #           build: pnpm nx run-many --target=build-native -- --target=aarch64-pc-windows-msvc
+  #   name: stable - ${{ matrix.settings.target }} - node@18
+  #   runs-on: ${{ matrix.settings.host }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         repository: ${{ needs.resolve-required-data.outputs.repo }} 
+  #         ref: ${{ needs.resolve-required-data.outputs.ref }}
 
-      - uses: pnpm/action-setup@v2
-        if: ${{ !github.event.inputs.pr }}
-        with:
-          version: 8
+  #     - uses: pnpm/action-setup@v2
+  #       with:
+  #         version: 8
 
-      - name: Setup node
-        uses: actions/setup-node@v4
-        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
-        with:
-          node-version: 18
-          check-latest: true
-          cache: 'pnpm'
+  #     - name: Setup node
+  #       uses: actions/setup-node@v4
+  #       if: ${{ !matrix.settings.docker }}
+  #       with:
+  #         node-version: 18
+  #         check-latest: true
+  #         cache: 'pnpm'
 
-      - name: Install
-        uses: dtolnay/rust-toolchain@stable
-        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
-        with:
-          targets: ${{ matrix.settings.target }}
+  #     - name: Install
+  #       uses: dtolnay/rust-toolchain@stable
+  #       if: ${{ !matrix.settings.docker }}
+  #       with:
+  #         targets: ${{ matrix.settings.target }}
 
-      - name: Cache cargo
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            .cargo-cache
-            target/
-          key: ${{ matrix.settings.target }}-cargo-registry
+  #     - name: Cache cargo
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: |
+  #           ~/.cargo/registry/index/
+  #           ~/.cargo/registry/cache/
+  #           ~/.cargo/git/db/
+  #           .cargo-cache
+  #           target/
+  #         key: ${{ matrix.settings.target }}-cargo-registry
 
-      - uses: goto-bus-stop/setup-zig@v2
-        if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' && !github.event.inputs.pr }}
-        with:
-          version: 0.10.0
+  #     - uses: goto-bus-stop/setup-zig@v2
+  #       if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' }}
+  #       with:
+  #         version: 0.10.0
 
-      - name: Setup toolchain
-        run: ${{ matrix.settings.setup }}
-        if: ${{ matrix.settings.setup && !github.event.inputs.pr }}
-        shell: bash
+  #     - name: Setup toolchain
+  #       run: ${{ matrix.settings.setup }}
+  #       if: ${{ matrix.settings.setup }}
+  #       shell: bash
 
-      - name: Setup node x86
-        if: matrix.settings.target == 'i686-pc-windows-msvc' && !github.event.inputs.pr
-        run: yarn config set supportedArchitectures.cpu "ia32"
-        shell: bash
+  #     - name: Setup node x86
+  #       if: matrix.settings.target == 'i686-pc-windows-msvc'
+  #       run: yarn config set supportedArchitectures.cpu "ia32"
+  #       shell: bash
 
-      - name: Install dependencies
-        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 30
+  #     - name: Install dependencies
+  #       if: ${{ !matrix.settings.docker }}
+  #       run: pnpm install --frozen-lockfile
+  #       timeout-minutes: 30
 
-      - name: Setup node x86
-        uses: actions/setup-node@v4
-        if: matrix.settings.target == 'i686-pc-windows-msvc' && !github.event.inputs.pr
-        with:
-          node-version: 18
-          check-latest: true
-          cache: pnpm
-          architecture: x86
+  #     - name: Setup node x86
+  #       uses: actions/setup-node@v4
+  #       if: matrix.settings.target == 'i686-pc-windows-msvc'
+  #       with:
+  #         node-version: 18
+  #         check-latest: true
+  #         cache: pnpm
+  #         architecture: x86
 
-      - name: Build in docker
-        uses: addnab/docker-run-action@v3
-        if: ${{ matrix.settings.docker && !github.event.inputs.pr }}
-        with:
-          image: ${{ matrix.settings.docker }}
-          options: --user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build
-          run: ${{ matrix.settings.build }}
+  #     - name: Build in docker
+  #       uses: addnab/docker-run-action@v3
+  #       if: ${{ matrix.settings.docker }}
+  #       with:
+  #         image: ${{ matrix.settings.docker }}
+  #         options: --user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build
+  #         run: ${{ matrix.settings.build }}
 
-      - name: Build
-        run: ${{ matrix.settings.build }}
-        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
-        shell: bash
+  #     - name: Build
+  #       run: ${{ matrix.settings.build }}
+  #       if: ${{ !matrix.settings.docker }}
+  #       shell: bash
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        if: ${{ !github.event.inputs.pr }}
-        with:
-          name: bindings-${{ matrix.settings.target }}
-          path: packages/**/*.node
-          if-no-files-found: error
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: bindings-${{ matrix.settings.target }}
+  #         path: packages/**/*.node
+  #         if-no-files-found: error
 
-  build-freebsd:
-    needs: [resolve-required-data]
-    if: ${{ github.repository_owner == 'nrwl' }}
-    runs-on: macos-13-large
-    name: Build FreeBSD
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        if: ${{ github.event_name != 'schedule' && !github.event.inputs.pr }}
-        with:
-          repository: ${{ needs.resolve-required-data.outputs.repo }} 
-          ref: ${{ needs.resolve-required-data.outputs.ref }}
+  # build-freebsd:
+  #   needs: [resolve-required-data]
+  #   if: ${{ github.repository_owner == 'nrwl' }}
+  #   runs-on: macos-13-large
+  #   name: Build FreeBSD
+  #   timeout-minutes: 45
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       if: ${{ github.event_name != 'schedule' && !github.event.inputs.pr }}
+  #       with:
+  #         repository: ${{ needs.resolve-required-data.outputs.repo }} 
+  #         ref: ${{ needs.resolve-required-data.outputs.ref }}
 
-      - name: Build
-        id: build
-        if: ${{ github.event_name != 'schedule' && !github.event.inputs.pr }}
-        uses: cross-platform-actions/action@v0.22.0
-        env:
-          DEBUG: napi:*
-          RUSTUP_IO_THREADS: 1
-          NX_PREFER_TS_NODE: true
-          PLAYWRIGHT_BROWSERS_PATH: 0
-        with:
-          operating_system: freebsd
-          version: '13.2'
-          architecture: x86-64
-          environment_variables: DEBUG RUSTUP_IO_THREADS CI NX_PREFER_TS_NODE PLAYWRIGHT_BROWSERS_PATH
-          shell: bash
-          run: |
-            env
-            whoami
-            sudo pkg install -y -f node libnghttp2 npm git
-            sudo npm install --location=global --ignore-scripts pnpm@8.15.7
-            curl https://sh.rustup.rs -sSf --output rustup.sh
-            sh rustup.sh -y --profile minimal --default-toolchain stable
-            source "$HOME/.cargo/env"
-            echo "~~~~ rustc --version ~~~~"
-            rustc --version
-            echo "~~~~ node -v ~~~~"
-            node -v
-            echo "~~~~ pnpm --version ~~~~"
-            pnpm --version
-            pwd
-            ls -lah
-            whoami
-            env
-            freebsd-version
-            mkdir -p /Users/runner/work/_temp/_github_workflow
-            echo "{}" > /Users/runner/work/_temp/_github_workflow/event.json
-            pnpm install --frozen-lockfile --ignore-scripts
-            pnpm nx run-many --verbose --outputStyle stream --target=build-native -- --target=x86_64-unknown-freebsd
-            pnpm nx reset
-            rm -rf node_modules
-            rm -rf dist
-            echo "KILL ALL NODE PROCESSES"
-            killall node || true
-            echo "COMPLETE"
+  #     - name: Build
+  #       id: build
+  #       if: ${{ github.event_name != 'schedule' && !github.event.inputs.pr }}
+  #       uses: cross-platform-actions/action@v0.22.0
+  #       env:
+  #         DEBUG: napi:*
+  #         RUSTUP_IO_THREADS: 1
+  #         NX_PREFER_TS_NODE: true
+  #         PLAYWRIGHT_BROWSERS_PATH: 0
+  #       with:
+  #         operating_system: freebsd
+  #         version: '13.2'
+  #         architecture: x86-64
+  #         environment_variables: DEBUG RUSTUP_IO_THREADS CI NX_PREFER_TS_NODE PLAYWRIGHT_BROWSERS_PATH
+  #         shell: bash
+  #         run: |
+  #           env
+  #           whoami
+  #           sudo pkg install -y -f node libnghttp2 npm git
+  #           sudo npm install --location=global --ignore-scripts pnpm@8.15.7
+  #           curl https://sh.rustup.rs -sSf --output rustup.sh
+  #           sh rustup.sh -y --profile minimal --default-toolchain stable
+  #           source "$HOME/.cargo/env"
+  #           echo "~~~~ rustc --version ~~~~"
+  #           rustc --version
+  #           echo "~~~~ node -v ~~~~"
+  #           node -v
+  #           echo "~~~~ pnpm --version ~~~~"
+  #           pnpm --version
+  #           pwd
+  #           ls -lah
+  #           whoami
+  #           env
+  #           freebsd-version
+  #           mkdir -p /Users/runner/work/_temp/_github_workflow
+  #           echo "{}" > /Users/runner/work/_temp/_github_workflow/event.json
+  #           pnpm install --frozen-lockfile --ignore-scripts
+  #           pnpm nx run-many --verbose --outputStyle stream --target=build-native -- --target=x86_64-unknown-freebsd
+  #           pnpm nx reset
+  #           rm -rf node_modules
+  #           rm -rf dist
+  #           echo "KILL ALL NODE PROCESSES"
+  #           killall node || true
+  #           echo "COMPLETE"
 
-      - name: Upload artifact
-        if: ${{ github.event_name != 'schedule' && !github.event.inputs.pr }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: bindings-freebsd
-          path: packages/**/*.node
-          if-no-files-found: error
+  #     - name: Upload artifact
+  #       if: ${{ github.event_name != 'schedule' && !github.event.inputs.pr }}
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: bindings-freebsd
+  #         path: packages/**/*.node
+  #         if-no-files-found: error
 
   publish:
     if: ${{ github.repository_owner == 'nrwl' }}
@@ -338,8 +335,8 @@ jobs:
       pull-requests: write
     needs:
       - resolve-required-data
-      - build-freebsd
-      - build
+      # - build-freebsd
+      # - build
     env:
       GH_TOKEN: ${{ github.token }}
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -378,35 +375,37 @@ jobs:
       #   run: ls -R artifacts
       #   shell: bash
 
-      - name: Publish
-        env:
-          VERSION: ${{ needs.resolve-required-data.outputs.version }}
-          DRY_RUN: ${{ needs.resolve-required-data.outputs.dry_run_flag }}
-          PUBLISH_BRANCH: ${{ needs.resolve-required-data.outputs.publish_branch }}
-        run: |
-          echo ""
-          # Create and check out the publish branch
-          git checkout -b $PUBLISH_BRANCH
-          echo ""
-          echo "Version set to: $VERSION"
-          echo "DRY_RUN set to: $DRY_RUN"
-          echo ""
-          pnpm nx-release --local=false $VERSION --dry-run
+      # - name: Publish
+      #   env:
+      #     VERSION: ${{ needs.resolve-required-data.outputs.version }}
+      #     DRY_RUN: ${{ needs.resolve-required-data.outputs.dry_run_flag }}
+      #     PUBLISH_BRANCH: ${{ needs.resolve-required-data.outputs.publish_branch }}
+      #   run: |
+      #     echo ""
+      #     # Create and check out the publish branch
+      #     git checkout -b $PUBLISH_BRANCH
+      #     echo ""
+      #     echo "Version set to: $VERSION"
+      #     echo "DRY_RUN set to: $DRY_RUN"
+      #     echo ""
+      #     pnpm nx-release --local=false $VERSION --dry-run
 
-      - name: Trigger Docs Release
-        # Publish docs only when a stable release is created (not prereleases or PR releases)
-        if: ${{ !github.event.release.prerelease && !github.event.inputs.pr }}
-        run: |
-          # The GITHUB_REF_NAME is a full version (i.e. 17.3.2). The branchName will only use the major version number.
-          # We will publish docs to the website branch based on the current tag (i.e. website-17)
-          branchName=website-${GITHUB_REF_NAME%.*.*}
-          # We force recreate the branch in order to always be up to date and avoid merge conflicts within the automated workflow
-          git branch -f $branchName
-          git push -f origin $branchName
+      # - name: Trigger Docs Release
+      #   # Publish docs only when a stable release is created (not prereleases or PR releases)
+      #   if: ${{ !github.event.release.prerelease && !github.event.inputs.pr }}
+      #   run: |
+      #     # The GITHUB_REF_NAME is a full version (i.e. 17.3.2). The branchName will only use the major version number.
+      #     # We will publish docs to the website branch based on the current tag (i.e. website-17)
+      #     branchName=website-${GITHUB_REF_NAME%.*.*}
+      #     # We force recreate the branch in order to always be up to date and avoid merge conflicts within the automated workflow
+      #     git branch -f $branchName
+      #     git push -f origin $branchName
 
       - name: (PR Release Only) Create comment for successful PR release
         if: success() && github.event.inputs.pr
         uses: actions/github-script@v6
+        env:
+          SUCCESS_COMMENT: ${{ needs.resolve-required-data.outputs.success_comment }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -414,9 +413,9 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: ${{ github.event.inputs.pr }},
-              body: "${{ needs.resolve-required-data.outputs.success_comment }}"
+              body: ${{ env.SUCCESS_COMMENT }}
             });
-
+      
       - name: (PR Release Only) Create comment for failed PR release
         if: failure() && github.event.inputs.pr
         uses: actions/github-script@v6
