@@ -58,7 +58,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const script = require('${{ github.workspace }}/scripts/publish-resolve-data.js');
-            await script({ github, context, core });
+            return await script({ github, context, core });
 
       - name: (PR Release Only) Check out latest master
         if: ${{ fromJSON(steps.script.outputs.result).ref != '' }}
