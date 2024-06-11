@@ -11,7 +11,6 @@
  *  version: string;
  *  dry_run_flag: DryRunFlag;
  *  success_comment: string;
- *  failure_comment: string;
  *  publish_branch: string;
  *  repo: string;
  *  ref: string;
@@ -20,9 +19,10 @@
  * @returns {Promise<PublishResolveData>}
  */
 module.exports = async ({ github, context }) => {
-  // We use an empty strings as default values so that we can let the `actions/checkout` action apply its default resolution
+  // We use empty strings as default values so that we can let the `actions/checkout` action apply its default resolution
   const DEFAULT_REF = '';
   const DEFAULT_REPO = '';
+
   const DEFAULT_PUBLISH_BRANCH = `publish/${github.ref_name}`;
 
   /** @type {DryRunFlag} */
@@ -36,7 +36,6 @@ module.exports = async ({ github, context }) => {
         version: 'canary',
         dry_run_flag: DRY_RUN_DISABLED,
         success_comment: '',
-        failure_comment: '',
         publish_branch: DEFAULT_PUBLISH_BRANCH,
         // In this case the default checkout logic should use the default (master) branch
         repo: DEFAULT_REPO,
@@ -51,7 +50,6 @@ module.exports = async ({ github, context }) => {
         version: github.ref_name,
         dry_run_flag: DRY_RUN_DISABLED,
         success_comment: '',
-        failure_comment: '',
         publish_branch: DEFAULT_PUBLISH_BRANCH,
         // In this case the default checkout logic should use the tag that triggered the release event
         ref: DEFAULT_REF,
@@ -69,7 +67,6 @@ module.exports = async ({ github, context }) => {
           version: '0.0.0-dry-run.0',
           dry_run_flag: DRY_RUN_ENABLED,
           success_comment: '',
-          failure_comment: '',
           publish_branch: DEFAULT_PUBLISH_BRANCH,
           // In this case the default checkout logic should use the branch/tag selected when triggering the workflow
           repo: DEFAULT_REPO,
@@ -104,7 +101,6 @@ module.exports = async ({ github, context }) => {
           pr_short_sha: shortSHA,
           pr_full_sha: fullSHA,
         }),
-        failure_comment: getFailureCommentForPR({ github }),
         // Custom publish branch name for PRs
         publish_branch: `publish/pr-${prNumber}`,
         // In this case we instruct the checkout action what repo and ref to use
@@ -162,12 +158,5 @@ function getSuccessCommentForPR({
   | **Workflow run** | [${github.run_id}](https://github.com/nrwl/nx/actions/runs/${github.run_id}) |
 
   To request a new release for this pull request, mention someone from the Nx team or the \`@nrwl/nx-pipelines-reviewers\`.
-`;
-}
-
-function getFailureCommentForPR({ github }) {
-  return `Failed to publish a PR release of this pull request, triggered by @${github.triggering_actor}.
-
-See the failed workflow run at: https://github.com/nrwl/nx/actions/runs/${github.run_id}
 `;
 }

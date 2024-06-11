@@ -40,8 +40,7 @@ jobs:
     outputs:
       version: ${{ fromJSON(steps.script.outputs.result).version }}
       dry_run_flag: ${{ fromJSON(steps.script.outputs.result).dry_run_flag }}
-      # success_comment: ${{ fromJSON(steps.script.outputs.result).success_comment }}
-      # failure_comment: ${{ fromJSON(steps.script.outputs.result).failure_comment }}
+      success_comment: ${{ fromJSON(steps.script.outputs.result).success_comment }}
       publish_branch: ${{ fromJSON(steps.script.outputs.result).publish_branch }}
       ref: ${{ fromJSON(steps.script.outputs.result).ref }}
       repo: ${{ fromJSON(steps.script.outputs.result).repo }}
@@ -178,17 +177,19 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ !github.event.inputs.pr }}
         with:
           repository: ${{ needs.resolve-required-data.outputs.repo }} 
           ref: ${{ needs.resolve-required-data.outputs.ref }}
 
       - uses: pnpm/action-setup@v2
+        if: ${{ !github.event.inputs.pr }}
         with:
           version: 8
 
       - name: Setup node
         uses: actions/setup-node@v4
-        if: ${{ !matrix.settings.docker }}
+        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
         with:
           node-version: 18
           check-latest: true
@@ -196,7 +197,7 @@ jobs:
 
       - name: Install
         uses: dtolnay/rust-toolchain@stable
-        if: ${{ !matrix.settings.docker }}
+        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
         with:
           targets: ${{ matrix.settings.target }}
 
@@ -212,28 +213,28 @@ jobs:
           key: ${{ matrix.settings.target }}-cargo-registry
 
       - uses: goto-bus-stop/setup-zig@v2
-        if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' }}
+        if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' && !github.event.inputs.pr }}
         with:
           version: 0.10.0
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
-        if: ${{ matrix.settings.setup }}
+        if: ${{ matrix.settings.setup && !github.event.inputs.pr }}
         shell: bash
 
       - name: Setup node x86
-        if: matrix.settings.target == 'i686-pc-windows-msvc'
+        if: matrix.settings.target == 'i686-pc-windows-msvc' && !github.event.inputs.pr
         run: yarn config set supportedArchitectures.cpu "ia32"
         shell: bash
 
       - name: Install dependencies
-        if: ${{ !matrix.settings.docker }}
+        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
         run: pnpm install --frozen-lockfile
         timeout-minutes: 30
 
       - name: Setup node x86
         uses: actions/setup-node@v4
-        if: matrix.settings.target == 'i686-pc-windows-msvc'
+        if: matrix.settings.target == 'i686-pc-windows-msvc' && !github.event.inputs.pr
         with:
           node-version: 18
           check-latest: true
@@ -242,7 +243,7 @@ jobs:
 
       - name: Build in docker
         uses: addnab/docker-run-action@v3
-        if: ${{ matrix.settings.docker }}
+        if: ${{ matrix.settings.docker && !github.event.inputs.pr }}
         with:
           image: ${{ matrix.settings.docker }}
           options: --user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build
@@ -250,11 +251,12 @@ jobs:
 
       - name: Build
         run: ${{ matrix.settings.build }}
-        if: ${{ !matrix.settings.docker }}
+        if: ${{ !matrix.settings.docker && !github.event.inputs.pr }}
         shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
+        if: ${{ !github.event.inputs.pr }}
         with:
           name: bindings-${{ matrix.settings.target }}
           path: packages/**/*.node
@@ -382,16 +384,17 @@ jobs:
           DRY_RUN: ${{ needs.resolve-required-data.outputs.dry_run_flag }}
           PUBLISH_BRANCH: ${{ needs.resolve-required-data.outputs.publish_branch }}
         run: |
+          echo ""
           # Create and check out the publish branch
           git checkout -b $PUBLISH_BRANCH
-
+          echo ""
           echo "Version set to: $VERSION"
           echo "DRY_RUN set to: $DRY_RUN"
-
+          echo ""
           pnpm nx-release --local=false $VERSION --dry-run
 
       - name: Trigger Docs Release
-        # Publish docs only on a full release
+        # Publish docs only when a stable release is created (not prereleases or PR releases)
         if: ${{ !github.event.release.prerelease && !github.event.inputs.pr }}
         run: |
           # The GITHUB_REF_NAME is a full version (i.e. 17.3.2). The branchName will only use the major version number.
@@ -401,28 +404,33 @@ jobs:
           git branch -f $branchName
           git push -f origin $branchName
 
-      # - name: (PR Release Only) Create comment for successful PR release
-      #   if: success() && needs.resolve-required-data.outputs.success_comment
-      #   uses: actions/github-script@v6
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       await github.rest.issues.createComment({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         issue_number: ${{ github.event.inputs.pr }},
-      #         body: "${{ needs.resolve-required-data.outputs.success_comment }}"
-      #       });
-      
-      # - name: (PR Release Only) Create comment for failed PR release
-      #   if: failure() && needs.resolve-required-data.outputs.failure_comment
-      #   uses: actions/github-script@v6
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       await github.rest.issues.createComment({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         issue_number: ${{ github.event.inputs.pr }},
-      #         body: "${{ needs.resolve-required-data.outputs.failure_comment }}"
-      #       });
+      - name: (PR Release Only) Create comment for successful PR release
+        if: success() && github.event.inputs.pr
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.inputs.pr }},
+              body: "${{ needs.resolve-required-data.outputs.success_comment }}"
+            });
+
+      - name: (PR Release Only) Create comment for failed PR release
+        if: failure() && github.event.inputs.pr
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # This script is intentionally kept inline (and not in publish-resolve-data.js) to ensure that an error with the comment generation itself is not missed.
+          script: |
+            const message = `
+            Failed to publish a PR release of this pull request, triggered by @${{ github.triggering_actor }}. 
+            See the failed workflow run at: https://github.com/nrwl/nx/actions/runs/${{ github.run_id }}
+            `;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.inputs.pr }},
+              body: message
+            });
