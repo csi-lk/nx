@@ -40,8 +40,8 @@ jobs:
     outputs:
       version: ${{ fromJSON(steps.script.outputs.result).version }}
       dry_run_flag: ${{ fromJSON(steps.script.outputs.result).dry_run_flag }}
-      success_comment: ${{ fromJSON(steps.script.outputs.result).success_comment }}
-      failure_comment: ${{ fromJSON(steps.script.outputs.result).failure_comment }}
+      # success_comment: ${{ fromJSON(steps.script.outputs.result).success_comment }}
+      # failure_comment: ${{ fromJSON(steps.script.outputs.result).failure_comment }}
       publish_branch: ${{ fromJSON(steps.script.outputs.result).publish_branch }}
       ref: ${{ fromJSON(steps.script.outputs.result).ref }}
       repo: ${{ fromJSON(steps.script.outputs.result).repo }}
@@ -401,28 +401,28 @@ jobs:
           git branch -f $branchName
           git push -f origin $branchName
 
-      - name: (PR Release Only) Create comment for successful PR release
-        if: success() && needs.resolve-required-data.outputs.success_comment
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: ${{ github.event.inputs.pr }},
-              body: "${{ needs.resolve-required-data.outputs.success_comment }}"
-            });
+      # - name: (PR Release Only) Create comment for successful PR release
+      #   if: success() && needs.resolve-required-data.outputs.success_comment
+      #   uses: actions/github-script@v6
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     script: |
+      #       await github.rest.issues.createComment({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         issue_number: ${{ github.event.inputs.pr }},
+      #         body: "${{ needs.resolve-required-data.outputs.success_comment }}"
+      #       });
       
-      - name: (PR Release Only) Create comment for failed PR release
-        if: failure() && needs.resolve-required-data.outputs.failure_comment
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: ${{ github.event.inputs.pr }},
-              body: "${{ needs.resolve-required-data.outputs.failure_comment }}"
-            });
+      # - name: (PR Release Only) Create comment for failed PR release
+      #   if: failure() && needs.resolve-required-data.outputs.failure_comment
+      #   uses: actions/github-script@v6
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     script: |
+      #       await github.rest.issues.createComment({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         issue_number: ${{ github.event.inputs.pr }},
+      #         body: "${{ needs.resolve-required-data.outputs.failure_comment }}"
+      #       });
