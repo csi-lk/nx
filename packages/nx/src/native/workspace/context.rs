@@ -2,7 +2,7 @@ use napi::bindgen_prelude::External;
 use std::collections::HashMap;
 
 use crate::native::hasher::hash;
-use crate::native::utils::{path::get_child_files, Normalize};
+use crate::native::utils::{path::get_child_files, Normalize, NxMutex, NxCondvar};
 use rayon::prelude::*;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,6 @@ use std::thread;
 use crate::native::logger::enable_logger;
 use crate::native::project_graph::utils::{find_project_for_path, ProjectRootMappings};
 use crate::native::types::FileData;
-use parking_lot::{Condvar, Mutex};
 use tracing::{trace, warn};
 
 use crate::native::workspace::files_archive::{read_files_archive, write_files_archive};
@@ -31,7 +30,7 @@ pub struct WorkspaceContext {
 
 type Files = Vec<(PathBuf, String)>;
 
-struct FilesWorker(Option<Arc<(Mutex<Files>, Condvar)>>);
+struct FilesWorker(Option<Arc<(NxMutex<Files>, NxCondvar)>>);
 impl FilesWorker {
     fn gather_files(workspace_root: &Path, cache_dir: String) -> Self {
         if !workspace_root.exists() {
@@ -44,14 +43,14 @@ impl FilesWorker {
 
         let archived_files = read_files_archive(&cache_dir);
 
-        let files_lock = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
+        let files_lock = Arc::new((NxMutex::new(Vec::new()), NxCondvar::new()));
         let files_lock_clone = Arc::clone(&files_lock);
         let workspace_root = workspace_root.to_owned();
 
         thread::spawn(move || {
             trace!("locking files");
             let (lock, cvar) = &*files_lock_clone;
-            let mut workspace_files = lock.lock();
+            let mut workspace_files = lock.lock().expect("Should be the first time locking files");
             let now = std::time::Instant::now();
             let file_hashes = if let Some(archived_files) = archived_files {
                 selective_files_hash(&workspace_root, archived_files)
@@ -81,13 +80,14 @@ impl FilesWorker {
     pub fn get_files(&self) -> Vec<FileData> {
         if let Some(files_sync) = &self.0 {
             let (files_lock, cvar) = files_sync.deref();
+
             trace!("locking files");
-            let mut files = files_lock.lock();
-            let files_len = files.len();
-            if files_len == 0 {
-                trace!("waiting for files");
-                cvar.wait(&mut files);
-            }
+            let files = files_lock.lock().expect("Should be able to lock files");
+
+            #[cfg(not(target_arch = "wasm32"))]
+            let files = cvar.wait(files, |guard| guard.len() != 0).expect("Always returns OK");
+            #[cfg(target_arch = "wasm32")]
+            let mut files = cvar.wait(files, |guard| guard.len() != 0).expect("Should be able to wait for files");
 
             let file_data = files
                 .iter()
@@ -97,6 +97,7 @@ impl FilesWorker {
                 })
                 .collect();
 
+            #[cfg(not(target_arch = "wasm32"))]
             drop(files);
 
             trace!("files are available");
@@ -118,7 +119,7 @@ impl FilesWorker {
         };
 
         let (files_lock, _) = &files_sync.deref();
-        let mut files = files_lock.lock();
+        let mut files = files_lock.lock().expect("Should always be able to update files");
         let mut map: HashMap<PathBuf, String> = files.drain(..).collect();
 
         for deleted_path in deleted_files_and_directories {
